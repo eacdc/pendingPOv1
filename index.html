@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pending PO Tool</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div>
+        <h1>Pending PO (GRN Not Fully Delivered)</h1>
+        <p class="subtitle">Track open PO lines with pending receipt quantity.</p>
+      </div>
+      <div class="header-actions">
+        <label for="databaseSelect">Database</label>
+        <select id="databaseSelect">
+          <option value="KOL">KOL</option>
+          <option value="AHM">AHM</option>
+        </select>
+        <button id="refreshBtn" type="button">Refresh</button>
+        <button id="saveAllChangesBtn" type="button" disabled>Save All Changed Dates</button>
+        <span id="pendingChangesText" class="header-pending-text">No pending date changes</span>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="table-card">
+        <div class="table-meta">
+          <span id="recordCount">0 records</span>
+          <span id="lastUpdated">Last updated: -</span>
+          <button id="resetFiltersBtn" type="button" class="secondary">Reset Filters</button>
+        </div>
+
+        <div class="table-container">
+          <table class="pending-po-table">
+            <thead>
+              <tr>
+                <th>PO No</th>
+                <th>PO Date</th>
+                <th>Expected Delivery</th>
+                <th>Supplier</th>
+                <th>Item Code</th>
+                <th>Item Name</th>
+                <th>Quality</th>
+                <th>GSM</th>
+                <th>Size W</th>
+                <th>Size L</th>
+                <th>Stock Unit</th>
+                <th>PO Qty</th>
+                <th>Received Qty</th>
+                <th>Pending Qty</th>
+                <th>Job Booking No</th>
+                <th>Job Name</th>
+              </tr>
+              <tr class="filter-row">
+                <th><input id="filterPoNumber" type="text" placeholder="Filter" /></th>
+                <th></th>
+                <th>
+                  <div class="date-filter-cell">
+                    <input id="filterFromExpectedDate" type="date" title="From date" />
+                    <input id="filterToExpectedDate" type="date" title="To date" />
+                  </div>
+                </th>
+                <th><input id="filterSupplier" type="text" placeholder="Filter" /></th>
+                <th><input id="filterItemCode" type="text" placeholder="Filter" /></th>
+                <th><input id="filterItemName" type="text" placeholder="Filter" /></th>
+                <th><input id="filterQuality" type="text" placeholder="Filter" /></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th>
+                  <div class="number-filter-cell">
+                    <input id="filterMinPendingQty" type="number" step="0.01" placeholder="Min" />
+                    <input id="filterMaxPendingQty" type="number" step="0.01" placeholder="Max" />
+                  </div>
+                </th>
+                <th><input id="filterJobBookingNo" type="text" placeholder="Filter" /></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr>
+                <td colspan="16" class="empty-row">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <p id="errorMessage" class="error-message"></p>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
