@@ -18,6 +18,7 @@
   const filterSupplier = document.getElementById('filterSupplier');
   const filterItemCode = document.getElementById('filterItemCode');
   const filterItemName = document.getElementById('filterItemName');
+  const filterItemGroup = document.getElementById('filterItemGroup');
   const filterQuality = document.getElementById('filterQuality');
   const filterJobBookingNo = document.getElementById('filterJobBookingNo');
   const filterFromExpectedDate = document.getElementById('filterFromExpectedDate');
@@ -30,6 +31,7 @@
     filterSupplier,
     filterItemCode,
     filterItemName,
+    filterItemGroup,
     filterQuality,
     filterJobBookingNo,
     filterFromExpectedDate,
@@ -126,7 +128,7 @@
 
   function renderRows(rows) {
     if (!rows.length) {
-      tableBody.innerHTML = '<tr><td colspan="16" class="empty-row">No records found.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="17" class="empty-row">No records found.</td></tr>';
       recordCount.textContent = '0 records';
       return;
     }
@@ -146,6 +148,7 @@
         row.supplier || '-',
         row.itemCode || '-',
         row.itemName || '-',
+        row.itemGroupName || '-',
         row.quality || '-',
         row.gsm ?? 0,
         row.sizeW ?? 0,
@@ -173,6 +176,7 @@
     const supplierQuery = filterSupplier.value.trim().toLowerCase();
     const itemCodeQuery = filterItemCode.value.trim().toLowerCase();
     const itemNameQuery = filterItemName.value.trim().toLowerCase();
+    const itemGroupQuery = filterItemGroup.value.trim().toLowerCase();
     const qualityQuery = filterQuality.value.trim().toLowerCase();
     const jobBookingQuery = filterJobBookingNo.value.trim().toLowerCase();
     const fromDate = filterFromExpectedDate.value;
@@ -184,6 +188,7 @@
     if (supplierQuery && !String(row.supplier || '').toLowerCase().includes(supplierQuery)) return false;
     if (itemCodeQuery && !String(row.itemCode || '').toLowerCase().includes(itemCodeQuery)) return false;
     if (itemNameQuery && !String(row.itemName || '').toLowerCase().includes(itemNameQuery)) return false;
+    if (itemGroupQuery && !String(row.itemGroupName || '').toLowerCase().includes(itemGroupQuery)) return false;
     if (qualityQuery && !String(row.quality || '').toLowerCase().includes(qualityQuery)) return false;
     if (jobBookingQuery && !String(row.jobBookingNo || '').toLowerCase().includes(jobBookingQuery)) return false;
 
@@ -308,7 +313,7 @@
     }
 
     errorMessage.textContent = '';
-    tableBody.innerHTML = '<tr><td colspan="16" class="empty-row">Loading...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="17" class="empty-row">Loading...</td></tr>';
 
     try {
       const base = getApiBaseUrl();
