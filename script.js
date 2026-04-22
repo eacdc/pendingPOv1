@@ -25,6 +25,15 @@
   const filterToExpectedDate = document.getElementById('filterToExpectedDate');
   const filterMinPendingQty = document.getElementById('filterMinPendingQty');
   const filterMaxPendingQty = document.getElementById('filterMaxPendingQty');
+  const filterExactGsm = document.getElementById('filterExactGsm');
+  const filterMinGsm = document.getElementById('filterMinGsm');
+  const filterMaxGsm = document.getElementById('filterMaxGsm');
+  const filterExactSizeW = document.getElementById('filterExactSizeW');
+  const filterMinSizeW = document.getElementById('filterMinSizeW');
+  const filterMaxSizeW = document.getElementById('filterMaxSizeW');
+  const filterExactSizeL = document.getElementById('filterExactSizeL');
+  const filterMinSizeL = document.getElementById('filterMinSizeL');
+  const filterMaxSizeL = document.getElementById('filterMaxSizeL');
 
   const filterInputs = [
     filterPoNumber,
@@ -36,6 +45,15 @@
     filterJobBookingNo,
     filterFromExpectedDate,
     filterToExpectedDate,
+    filterExactGsm,
+    filterMinGsm,
+    filterMaxGsm,
+    filterExactSizeW,
+    filterMinSizeW,
+    filterMaxSizeW,
+    filterExactSizeL,
+    filterMinSizeL,
+    filterMaxSizeL,
     filterMinPendingQty,
     filterMaxPendingQty
   ];
@@ -117,6 +135,25 @@
     return n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
   }
 
+  function numberInRange(value, minStr, maxStr) {
+    const n = Number(value);
+    const minOk = minStr === '' || (Number.isFinite(n) && n >= Number(minStr));
+    const maxOk = maxStr === '' || (Number.isFinite(n) && n <= Number(maxStr));
+    return minOk && maxOk;
+  }
+
+  /** When exactStr is non-empty, value must equal that number (Min/Max ignored for that column). */
+  function numberMatchesFilter(value, exactStr, minStr, maxStr) {
+    const n = Number(value);
+    const exact = exactStr.trim();
+    if (exact !== '') {
+      const target = Number(exact);
+      if (!Number.isFinite(n) || !Number.isFinite(target)) return false;
+      return n === target;
+    }
+    return numberInRange(value, minStr, maxStr);
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -183,6 +220,15 @@
     const toDate = filterToExpectedDate.value;
     const minPending = filterMinPendingQty.value.trim();
     const maxPending = filterMaxPendingQty.value.trim();
+    const exactGsm = filterExactGsm.value.trim();
+    const minGsm = filterMinGsm.value.trim();
+    const maxGsm = filterMaxGsm.value.trim();
+    const exactSizeW = filterExactSizeW.value.trim();
+    const minSizeW = filterMinSizeW.value.trim();
+    const maxSizeW = filterMaxSizeW.value.trim();
+    const exactSizeL = filterExactSizeL.value.trim();
+    const minSizeL = filterMinSizeL.value.trim();
+    const maxSizeL = filterMaxSizeL.value.trim();
 
     if (poQuery && !String(row.poNumber || '').toLowerCase().includes(poQuery)) return false;
     if (supplierQuery && !String(row.supplier || '').toLowerCase().includes(supplierQuery)) return false;
@@ -199,6 +245,10 @@
     const pending = Number(row.pendingQty || 0);
     if (minPending !== '' && pending < Number(minPending)) return false;
     if (maxPending !== '' && pending > Number(maxPending)) return false;
+
+    if (!numberMatchesFilter(row.gsm, exactGsm, minGsm, maxGsm)) return false;
+    if (!numberMatchesFilter(row.sizeW, exactSizeW, minSizeW, maxSizeW)) return false;
+    if (!numberMatchesFilter(row.sizeL, exactSizeL, minSizeL, maxSizeL)) return false;
 
     return true;
   }
