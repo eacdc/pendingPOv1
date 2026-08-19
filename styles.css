@@ -339,6 +339,38 @@ button.secondary:hover {
   min-height: 18px;
 }
 
+.btn-close-po {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid #b91c1c;
+  background: #7f1d1d;
+  color: #fecaca;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-close-po:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.btn-close-po:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.pending-po-table th:nth-child(18),
+.pending-po-table td:nth-child(18) {
+  min-width: 90px;
+  position: sticky;
+  right: 0;
+  background: inherit;
+  z-index: 2;
+}
+
 @media (max-width: 768px) {
   .app-header {
     flex-direction: column;

@@ -61,6 +61,7 @@
   let sourceRows = [];
   const editedDates = new Map();
   const rowSaving = new Set();
+  const rowClosing = new Set();
   const rowErrors = new Map();
   let isBulkSaving = false;
 
@@ -76,18 +77,24 @@
     }
   }
 
+  function isLocalFrontend() {
+    try {
+      const protocol = String(window.location.protocol || '').toLowerCase();
+      const host = String(window.location.hostname || '').toLowerCase();
+      return protocol === 'file:' || !host || host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    } catch (_e) {
+      return false;
+    }
+  }
+
   function getApiBaseUrl() {
     try {
       const stored = localStorage.getItem('pending_po_api_base');
-      const host = String(window.location.hostname || '').toLowerCase();
-      const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-      const defaultBase = isLocalHost ? LOCAL_API_BASE : DEFAULT_API_BASE;
+      const defaultBase = isLocalFrontend() ? LOCAL_API_BASE : DEFAULT_API_BASE;
       const selected = isValidAbsoluteUrl(stored) ? stored : defaultBase;
       return selected.endsWith('/') ? selected : selected + '/';
     } catch (_e) {
-      const host = String(window.location.hostname || '').toLowerCase();
-      const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-      return isLocalHost ? LOCAL_API_BASE : DEFAULT_API_BASE;
+      return isLocalFrontend() ? LOCAL_API_BASE : DEFAULT_API_BASE;
     }
   }
 
@@ -165,7 +172,7 @@
 
   function renderRows(rows) {
     if (!rows.length) {
-      tableBody.innerHTML = '<tr><td colspan="17" class="empty-row">No records found.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="18" class="empty-row">No records found.</td></tr>';
       recordCount.textContent = '0 records';
       return;
     }
@@ -175,8 +182,11 @@
       const dateValue = getCurrentExpectedDate(row);
       const dirty = isRowDirty(row);
       const saving = rowSaving.has(rowKey);
+      const closing = rowClosing.has(rowKey);
 
       const dateDisplay = dirty ? formatDate(dateValue) : formatDate(row.expectedDeliveryDate);
+      const closeBtnLabel = closing ? 'Closing…' : 'Close';
+      const closeBtn = `<button type="button" class="btn-close-po" data-row-key="${escapeHtml(rowKey)}" data-po-transaction-id="${escapeHtml(row.poTransactionId)}" data-po-number="${escapeHtml(row.poNumber || '')}" ${closing ? 'disabled' : ''}>${closeBtnLabel}</button>`;
 
       const cells = [
         row.poNumber || '-',
@@ -195,12 +205,13 @@
         formatNumber(row.receivedQty),
         formatNumber(row.pendingQty),
         row.jobBookingNo || '-',
-        row.jobName || '-'
+        row.jobName || '-',
+        closeBtn
       ];
 
-      const rowClasses = [dirty ? 'dirty-row' : '', saving ? 'row-saving' : ''].filter(Boolean).join(' ');
-      return `<tr class="${rowClasses}">${cells.map((cell, idx) => {
-        if (idx === 2) return `<td>${cell}</td>`;
+      const rowClasses = [dirty ? 'dirty-row' : '', saving || closing ? 'row-saving' : ''].filter(Boolean).join(' ');
+      return `<tr class="${rowClasses}" data-row-key="${escapeHtml(rowKey)}">${cells.map((cell, idx) => {
+        if (idx === 2 || idx === 17) return `<td>${cell}</td>`;
         return `<td title="${escapeHtml(cell)}">${escapeHtml(cell)}</td>`;
       }).join('')}</tr>`;
     }).join('');
@@ -355,6 +366,65 @@
     applyFilters();
   }
 
+  async function closePendingPo(rowKey) {
+    const row = sourceRows.find((item) => getRowKey(item) === rowKey);
+    if (!row) {
+      errorMessage.textContent = 'Row not found.';
+      return;
+    }
+
+    const poNo = row.poNumber || row.poTransactionId || '';
+    const ok = window.confirm(
+      `Close PO ${poNo} manually?\n\nThis will mark the purchase order as completed and cannot be undone from this screen.`
+    );
+    if (!ok) return;
+
+    if (rowClosing.has(rowKey)) return;
+    rowClosing.add(rowKey);
+    errorMessage.textContent = '';
+    applyFilters();
+
+    try {
+      const base = getApiBaseUrl();
+      const url = new URL('grn/pending-po-close', base);
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          database: String(databaseSelect.value || '').toUpperCase(),
+          poTransactionId: row.poTransactionId,
+          completedBy: 2,
+          reason: 'closed manually',
+          dryRun: 0
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.status !== true) {
+        throw new Error(data?.error || `Failed to close PO (${res.status})`);
+      }
+
+      // SP closes the whole PO — remove all lines for this transaction from the list
+      const closedTx = Number(row.poTransactionId);
+      sourceRows = sourceRows.filter((r) => Number(r.poTransactionId) !== closedTx);
+      for (const key of [...editedDates.keys()]) {
+        if (key.startsWith(`c:${closedTx}:`)) editedDates.delete(key);
+      }
+      lastUpdated.textContent = `Last updated: ${new Date().toLocaleString('en-GB')} (closed PO ${poNo})`;
+      applyFilters();
+    } catch (err) {
+      errorMessage.textContent = String(err.message || err);
+      applyFilters();
+    } finally {
+      rowClosing.delete(rowKey);
+      applyFilters();
+    }
+  }
+
   async function fetchPendingPoRows() {
     const selectedDatabase = String(databaseSelect.value || '').toUpperCase();
     if (selectedDatabase !== 'KOL' && selectedDatabase !== 'AHM') {
@@ -363,7 +433,7 @@
     }
 
     errorMessage.textContent = '';
-    tableBody.innerHTML = '<tr><td colspan="17" class="empty-row">Loading...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="18" class="empty-row">Loading...</td></tr>';
 
     try {
       const base = getApiBaseUrl();
@@ -459,6 +529,14 @@
   tableBody.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
+
+    const closeBtn = target.closest('.btn-close-po');
+    if (closeBtn) {
+      event.preventDefault();
+      const rowKey = closeBtn.getAttribute('data-row-key');
+      if (rowKey) closePendingPo(rowKey);
+      return;
+    }
 
     const displaySpan = target.closest('.expected-date-display');
     if (displaySpan) {
