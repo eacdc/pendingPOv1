@@ -10,8 +10,8 @@
   <div id="app">
     <header class="app-header">
       <div>
-        <h1>Pending PO (GRN Not Fully Delivered)</h1>
-        <p class="subtitle">Track open PO lines with pending receipt quantity.</p>
+        <h1>Pending PO Tool</h1>
+        <p class="subtitle">Track pending and completed purchase order lines.</p>
       </div>
       <div class="header-actions">
         <label for="databaseSelect">Database</label>
@@ -26,6 +26,11 @@
     </header>
 
     <main class="app-main">
+      <div class="po-mode-bar" role="group" aria-label="PO list mode">
+        <button type="button" id="mode-pending" class="po-mode-btn active" data-mode="pending">Pending</button>
+        <button type="button" id="mode-completed" class="po-mode-btn" data-mode="completed">Completed</button>
+      </div>
+
       <section class="table-card">
         <div class="table-meta">
           <span id="recordCount">0 records</span>
@@ -33,7 +38,7 @@
           <button id="resetFiltersBtn" type="button" class="secondary">Reset Filters</button>
         </div>
 
-        <div class="table-container">
+        <div id="pending-table-wrap" class="table-container">
           <table class="pending-po-table">
             <thead>
               <tr>
@@ -113,6 +118,55 @@
           </table>
         </div>
 
+        <div id="completed-table-wrap" class="table-container hidden">
+          <table class="pending-po-table completed-po-table">
+            <thead>
+              <tr>
+                <th>PO No</th>
+                <th>PO Date</th>
+                <th>Vendor</th>
+                <th>Item Code</th>
+                <th>Item Name</th>
+                <th>Stock Unit</th>
+                <th>Ordered Qty</th>
+                <th>Received Qty</th>
+                <th>Short Qty</th>
+                <th>Short Value</th>
+                <th>Purchase Rate</th>
+                <th>Last GRN Date</th>
+                <th>Completed Date</th>
+                <th>Days to Close</th>
+                <th>Closure Source</th>
+                <th>Reason</th>
+                <th>Action</th>
+              </tr>
+              <tr class="filter-row">
+                <th><input id="filterCompletedPoNumber" type="text" placeholder="Filter" /></th>
+                <th></th>
+                <th><input id="filterCompletedVendor" type="text" placeholder="Filter" /></th>
+                <th><input id="filterCompletedItemCode" type="text" placeholder="Filter" /></th>
+                <th><input id="filterCompletedItemName" type="text" placeholder="Filter" /></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th><input id="filterCompletedClosureSource" type="text" placeholder="Filter" /></th>
+                <th><input id="filterCompletedReason" type="text" placeholder="Filter" /></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="completedTableBody">
+              <tr>
+                <td colspan="17" class="empty-row">Switch to Completed and refresh to load.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <p id="errorMessage" class="error-message"></p>

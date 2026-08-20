@@ -10,6 +10,11 @@
   const saveAllChangesBtn = document.getElementById('saveAllChangesBtn');
   const pendingChangesText = document.getElementById('pendingChangesText');
   const tableBody = document.getElementById('tableBody');
+  const completedTableBody = document.getElementById('completedTableBody');
+  const pendingTableWrap = document.getElementById('pending-table-wrap');
+  const completedTableWrap = document.getElementById('completed-table-wrap');
+  const modePendingBtn = document.getElementById('mode-pending');
+  const modeCompletedBtn = document.getElementById('mode-completed');
   const recordCount = document.getElementById('recordCount');
   const lastUpdated = document.getElementById('lastUpdated');
   const errorMessage = document.getElementById('errorMessage');
@@ -35,7 +40,14 @@
   const filterMinSizeL = document.getElementById('filterMinSizeL');
   const filterMaxSizeL = document.getElementById('filterMaxSizeL');
 
-  const filterInputs = [
+  const filterCompletedPoNumber = document.getElementById('filterCompletedPoNumber');
+  const filterCompletedVendor = document.getElementById('filterCompletedVendor');
+  const filterCompletedItemCode = document.getElementById('filterCompletedItemCode');
+  const filterCompletedItemName = document.getElementById('filterCompletedItemName');
+  const filterCompletedClosureSource = document.getElementById('filterCompletedClosureSource');
+  const filterCompletedReason = document.getElementById('filterCompletedReason');
+
+  const pendingFilterInputs = [
     filterPoNumber,
     filterSupplier,
     filterItemCode,
@@ -58,10 +70,23 @@
     filterMaxPendingQty
   ];
 
+  const completedFilterInputs = [
+    filterCompletedPoNumber,
+    filterCompletedVendor,
+    filterCompletedItemCode,
+    filterCompletedItemName,
+    filterCompletedClosureSource,
+    filterCompletedReason
+  ];
+
+  let listMode = 'pending'; // 'pending' | 'completed'
   let sourceRows = [];
+  let completedRows = [];
+  let completedLoaded = false;
   const editedDates = new Map();
   const rowSaving = new Set();
   const rowClosing = new Set();
+  const rowReopening = new Set();
   const rowErrors = new Map();
   let isBulkSaving = false;
 
@@ -112,12 +137,23 @@
     return d.toLocaleDateString('en-GB');
   }
 
+  function formatDateTime(value) {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleString('en-GB');
+  }
+
   function isValidDateInput(value) {
     return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
   }
 
   function getRowKey(row) {
     return `c:${Number(row.poTransactionId || 0)}:${Number(row.itemId || 0)}`;
+  }
+
+  function getCompletedRowKey(row) {
+    return `d:${Number(row.transactionDetailId || 0)}`;
   }
 
   function getOriginalExpectedDate(row) {
@@ -170,10 +206,35 @@
       .replace(/'/g, '&#39;');
   }
 
+  function syncModeUi() {
+    const isPending = listMode === 'pending';
+    modePendingBtn?.classList.toggle('active', isPending);
+    modeCompletedBtn?.classList.toggle('active', !isPending);
+    pendingTableWrap?.classList.toggle('hidden', !isPending);
+    completedTableWrap?.classList.toggle('hidden', isPending);
+    if (saveAllChangesBtn) saveAllChangesBtn.style.display = isPending ? '' : 'none';
+    if (pendingChangesText) pendingChangesText.style.display = isPending ? '' : 'none';
+  }
+
+  function setListMode(mode) {
+    const next = mode === 'completed' ? 'completed' : 'pending';
+    if (listMode === next) return;
+    listMode = next;
+    errorMessage.textContent = '';
+    syncModeUi();
+    if (listMode === 'pending') {
+      applyFilters();
+    } else if (completedLoaded) {
+      applyCompletedFilters();
+    } else {
+      fetchCompletedPoRows();
+    }
+  }
+
   function renderRows(rows) {
     if (!rows.length) {
       tableBody.innerHTML = '<tr><td colspan="18" class="empty-row">No records found.</td></tr>';
-      recordCount.textContent = '0 records';
+      if (listMode === 'pending') recordCount.textContent = '0 records';
       return;
     }
 
@@ -216,7 +277,51 @@
       }).join('')}</tr>`;
     }).join('');
 
-    recordCount.textContent = `${rows.length} records`;
+    if (listMode === 'pending') recordCount.textContent = `${rows.length} records`;
+  }
+
+  function renderCompletedRows(rows) {
+    if (!completedTableBody) return;
+    if (!rows.length) {
+      completedTableBody.innerHTML = '<tr><td colspan="17" class="empty-row">No completed records found.</td></tr>';
+      if (listMode === 'completed') recordCount.textContent = '0 records';
+      return;
+    }
+
+    completedTableBody.innerHTML = rows.map((row) => {
+      const rowKey = getCompletedRowKey(row);
+      const reopening = rowReopening.has(rowKey);
+      const reopenLabel = reopening ? 'Reopening…' : 'Reopen';
+      const reopenBtn = `<button type="button" class="btn-reopen-po" data-row-key="${escapeHtml(rowKey)}" data-transaction-detail-id="${escapeHtml(row.transactionDetailId)}" data-po-number="${escapeHtml(row.poNumber || '')}" ${reopening ? 'disabled' : ''}>${reopenLabel}</button>`;
+
+      const cells = [
+        row.poNumber || '-',
+        formatDate(row.poDate),
+        row.vendorName || '-',
+        row.itemCode || '-',
+        row.itemName || '-',
+        row.stockUnit || '-',
+        formatNumber(row.orderedQty),
+        formatNumber(row.receivedQty),
+        formatNumber(row.shortQty),
+        formatNumber(row.shortValue),
+        formatNumber(row.purchaseRate),
+        formatDate(row.lastGrnDate),
+        formatDateTime(row.completedDate),
+        formatNumber(row.daysPoToClose),
+        row.closureSource || '-',
+        row.reason || '-',
+        reopenBtn
+      ];
+
+      const rowClasses = reopening ? 'row-saving' : '';
+      return `<tr class="${rowClasses}" data-row-key="${escapeHtml(rowKey)}">${cells.map((cell, idx) => {
+        if (idx === 16) return `<td>${cell}</td>`;
+        return `<td title="${escapeHtml(cell)}">${escapeHtml(cell)}</td>`;
+      }).join('')}</tr>`;
+    }).join('');
+
+    if (listMode === 'completed') recordCount.textContent = `${rows.length} records`;
   }
 
   function rowMatches(row) {
@@ -264,10 +369,32 @@
     return true;
   }
 
+  function completedRowMatches(row) {
+    const poQuery = (filterCompletedPoNumber?.value || '').trim().toLowerCase();
+    const vendorQuery = (filterCompletedVendor?.value || '').trim().toLowerCase();
+    const itemCodeQuery = (filterCompletedItemCode?.value || '').trim().toLowerCase();
+    const itemNameQuery = (filterCompletedItemName?.value || '').trim().toLowerCase();
+    const closureQuery = (filterCompletedClosureSource?.value || '').trim().toLowerCase();
+    const reasonQuery = (filterCompletedReason?.value || '').trim().toLowerCase();
+
+    if (poQuery && !String(row.poNumber || '').toLowerCase().includes(poQuery)) return false;
+    if (vendorQuery && !String(row.vendorName || '').toLowerCase().includes(vendorQuery)) return false;
+    if (itemCodeQuery && !String(row.itemCode || '').toLowerCase().includes(itemCodeQuery)) return false;
+    if (itemNameQuery && !String(row.itemName || '').toLowerCase().includes(itemNameQuery)) return false;
+    if (closureQuery && !String(row.closureSource || '').toLowerCase().includes(closureQuery)) return false;
+    if (reasonQuery && !String(row.reason || '').toLowerCase().includes(reasonQuery)) return false;
+    return true;
+  }
+
   function applyFilters() {
     const filtered = sourceRows.filter(rowMatches);
     renderRows(filtered);
     updateBulkSaveControls();
+  }
+
+  function applyCompletedFilters() {
+    const filtered = completedRows.filter(completedRowMatches);
+    renderCompletedRows(filtered);
   }
 
   function getDirtyRows() {
@@ -279,6 +406,7 @@
 
   function updateBulkSaveControls() {
     if (!saveAllChangesBtn || !pendingChangesText) return;
+    if (listMode !== 'pending') return;
     const dirtyRows = getDirtyRows();
     if (isBulkSaving) {
       saveAllChangesBtn.disabled = true;
@@ -375,7 +503,7 @@
 
     const poNo = row.poNumber || row.poTransactionId || '';
     const ok = window.confirm(
-      `Close PO ${poNo} manually?\n\nThis will mark the purchase order as completed and cannot be undone from this screen.`
+      `Close PO ${poNo} manually?\n\nThis marks the purchase order as completed. You can reopen it later from the Completed tab.`
     );
     if (!ok) return;
 
@@ -408,12 +536,12 @@
         throw new Error(data?.error || `Failed to close PO (${res.status})`);
       }
 
-      // SP closes the whole PO — remove all lines for this transaction from the list
       const closedTx = Number(row.poTransactionId);
       sourceRows = sourceRows.filter((r) => Number(r.poTransactionId) !== closedTx);
       for (const key of [...editedDates.keys()]) {
         if (key.startsWith(`c:${closedTx}:`)) editedDates.delete(key);
       }
+      completedLoaded = false;
       lastUpdated.textContent = `Last updated: ${new Date().toLocaleString('en-GB')} (closed PO ${poNo})`;
       applyFilters();
     } catch (err) {
@@ -422,6 +550,66 @@
     } finally {
       rowClosing.delete(rowKey);
       applyFilters();
+    }
+  }
+
+  async function reopenCompletedPo(rowKey) {
+    const row = completedRows.find((item) => getCompletedRowKey(item) === rowKey);
+    if (!row) {
+      errorMessage.textContent = 'Row not found.';
+      return;
+    }
+
+    const detailId = Number(row.transactionDetailId || 0);
+    if (!(Number.isInteger(detailId) && detailId > 0)) {
+      errorMessage.textContent = 'Missing TransactionDetailID for this row.';
+      return;
+    }
+
+    const poNo = row.poNumber || detailId;
+    const ok = window.confirm(
+      `Reopen PO line ${poNo} (Detail ${detailId})?\n\nThis will move the line back toward pending.`
+    );
+    if (!ok) return;
+
+    if (rowReopening.has(rowKey)) return;
+    rowReopening.add(rowKey);
+    errorMessage.textContent = '';
+    applyCompletedFilters();
+
+    try {
+      const base = getApiBaseUrl();
+      const url = new URL('grn/pending-po-reopen', base);
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          database: String(databaseSelect.value || '').toUpperCase(),
+          transactionDetailId: detailId,
+          onlyToolClosed: 0,
+          reason: 'reopened manually',
+          dryRun: 0
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.status !== true) {
+        throw new Error(data?.error || `Failed to reopen PO (${res.status})`);
+      }
+
+      completedRows = completedRows.filter((r) => Number(r.transactionDetailId) !== detailId);
+      lastUpdated.textContent = `Last updated: ${new Date().toLocaleString('en-GB')} (reopened ${poNo})`;
+      applyCompletedFilters();
+    } catch (err) {
+      errorMessage.textContent = String(err.message || err);
+      applyCompletedFilters();
+    } finally {
+      rowReopening.delete(rowKey);
+      applyCompletedFilters();
     }
   }
 
@@ -471,9 +659,73 @@
     }
   }
 
+  async function fetchCompletedPoRows() {
+    const selectedDatabase = String(databaseSelect.value || '').toUpperCase();
+    if (selectedDatabase !== 'KOL' && selectedDatabase !== 'AHM') {
+      errorMessage.textContent = 'Please select a valid database.';
+      return;
+    }
+
+    errorMessage.textContent = '';
+    if (completedTableBody) {
+      completedTableBody.innerHTML = '<tr><td colspan="17" class="empty-row">Loading...</td></tr>';
+    }
+    if (listMode === 'completed') recordCount.textContent = 'Loading…';
+
+    try {
+      const base = getApiBaseUrl();
+      const url = new URL('grn/completed-pos', base);
+      url.searchParams.set('database', selectedDatabase);
+
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(text || 'Failed to fetch completed PO records');
+      }
+
+      const data = await res.json();
+      if (!data || data.status !== true) {
+        throw new Error(data?.error || 'API returned unsuccessful response');
+      }
+
+      completedRows = Array.isArray(data.records) ? data.records : [];
+      completedLoaded = true;
+      rowReopening.clear();
+      applyCompletedFilters();
+      lastUpdated.textContent = `Last updated: ${new Date().toLocaleString('en-GB')}`;
+    } catch (err) {
+      completedRows = [];
+      completedLoaded = false;
+      renderCompletedRows([]);
+      errorMessage.textContent = String(err.message || err);
+    }
+  }
+
+  function refreshCurrentList() {
+    if (listMode === 'completed') {
+      fetchCompletedPoRows();
+    } else {
+      fetchPendingPoRows();
+    }
+  }
+
   function resetFilters() {
-    filterInputs.forEach((input) => {
-      input.value = '';
+    if (listMode === 'completed') {
+      completedFilterInputs.forEach((input) => {
+        if (input) input.value = '';
+      });
+      applyCompletedFilters();
+      return;
+    }
+    pendingFilterInputs.forEach((input) => {
+      if (input) input.value = '';
     });
     applyFilters();
   }
@@ -544,14 +796,39 @@
     }
   });
 
-  refreshBtn.addEventListener('click', fetchPendingPoRows);
+  completedTableBody?.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const reopenBtn = target.closest('.btn-reopen-po');
+    if (!reopenBtn) return;
+    event.preventDefault();
+    const rowKey = reopenBtn.getAttribute('data-row-key');
+    if (rowKey) reopenCompletedPo(rowKey);
+  });
+
+  modePendingBtn?.addEventListener('click', () => setListMode('pending'));
+  modeCompletedBtn?.addEventListener('click', () => setListMode('completed'));
+
+  refreshBtn.addEventListener('click', refreshCurrentList);
   resetFiltersBtn.addEventListener('click', resetFilters);
   saveAllChangesBtn?.addEventListener('click', saveAllExpectedDeliveryDates);
-  databaseSelect.addEventListener('change', fetchPendingPoRows);
-  filterInputs.forEach((input) => {
+  databaseSelect.addEventListener('change', () => {
+    completedLoaded = false;
+    completedRows = [];
+    refreshCurrentList();
+  });
+
+  pendingFilterInputs.forEach((input) => {
+    if (!input) return;
     const evtName = input.type === 'date' ? 'change' : 'input';
     input.addEventListener(evtName, applyFilters);
   });
 
+  completedFilterInputs.forEach((input) => {
+    if (!input) return;
+    input.addEventListener('input', applyCompletedFilters);
+  });
+
+  syncModeUi();
   fetchPendingPoRows();
 })();
